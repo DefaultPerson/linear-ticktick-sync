@@ -1,0 +1,76 @@
+[project]
+name = "linear-ticktick-sync"
+version = "0.1.0"
+description = "Two-way synchronizer between Linear (HMC team, project 'hm') and TickTick list 🐍HM&Trade."
+authors = [
+    { name = "DefaultPerson", email = "exchange.degen@gmail.com" },
+]
+requires-python = ">=3.12"
+readme = "README.md"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.118",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.28",
+    "gql[httpx]>=3.5",
+    "apscheduler>=3.11",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
+    "alembic>=1.14",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "typer>=0.15",
+    "rapidfuzz>=3.10",
+    "aiolimiter>=1.2",
+    "tenacity>=9.0",
+    "python-dateutil>=2.9",
+    "structlog>=24.4",
+]
+
+[project.scripts]
+lt-sync = "lt_sync.__main__:app"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pyright>=1.1.390",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "respx>=0.22",
+    "freezegun>=1.5",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "lt_sync"
+module-root = "src"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "A", "PERF"]
+ignore = ["E501", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/lt_sync/__main__.py" = ["B008"]  # typer requires function-call defaults
+
+[tool.ruff.lint.isort]
+known-first-party = ["lt_sync"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests against real APIs (require live credentials)",
+]

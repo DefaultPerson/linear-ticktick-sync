@@ -1,0 +1,20 @@
+services:
+  lt-sync:
+    build: .
+    image: linear-ticktick-sync:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/state.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - lt-sync-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as r; r.urlopen('http://127.0.0.1:8000/healthz').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  lt-sync-data:
