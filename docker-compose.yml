@@ -3,11 +3,25 @@ services:
     build: .
     image: linear-ticktick-sync:latest
     restart: unless-stopped
-    env_file: .env
+    # Env vars come from Coolify (or `docker compose --env-file .env up`).
     environment:
       DATABASE_URL: sqlite+aiosqlite:////data/state.db
-    ports:
-      - "8000:8000"
+      LINEAR_API_KEY: ${LINEAR_API_KEY}
+      LINEAR_TEAM_KEY: ${LINEAR_TEAM_KEY:-HMC}
+      LINEAR_PROJECT_NAME: ${LINEAR_PROJECT_NAME:-hm}
+      LINEAR_WEBHOOK_SECRET: ${LINEAR_WEBHOOK_SECRET}
+      TICKTICK_CLIENT_ID: ${TICKTICK_CLIENT_ID}
+      TICKTICK_CLIENT_SECRET: ${TICKTICK_CLIENT_SECRET}
+      TICKTICK_REDIRECT_URI: ${TICKTICK_REDIRECT_URI}
+      TICKTICK_LIST_ID: ${TICKTICK_LIST_ID:-69cd04eb8f088eaeff7fb755}
+      TICKTICK_DEFAULT_TZ: ${TICKTICK_DEFAULT_TZ:-Europe/Moscow}
+      PUSHOVER_TOKEN: ${PUSHOVER_TOKEN:-}
+      PUSHOVER_USER: ${PUSHOVER_USER:-}
+      POLL_INTERVAL_SEC: ${POLL_INTERVAL_SEC:-180}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    expose:
+      - "8000"
     volumes:
       - lt-sync-data:/data
     healthcheck:
