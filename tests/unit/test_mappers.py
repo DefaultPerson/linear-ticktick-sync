@@ -6,7 +6,6 @@ from lt_sync.linear.types import LinearState
 from lt_sync.sync import mappers
 from lt_sync.ticktick.types import TTChecklistItem, TTTask
 
-
 # ─── Status ──────────────────────────────────────────────────────────────────
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from lt_sync.linear.types import LinearIssue
 from lt_sync.state.models import Link
@@ -40,7 +40,7 @@ def test_noop_when_hash_matches():
 
 
 def test_tt_newer_wins():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     d = decide(
         link=_link(),
         issue=_issue(updated_at=now - timedelta(hours=1)),
@@ -51,7 +51,7 @@ def test_tt_newer_wins():
 
 
 def test_linear_newer_wins():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     d = decide(
         link=_link(),
         issue=_issue(updated_at=now),
@@ -62,7 +62,7 @@ def test_linear_newer_wins():
 
 
 def test_tie_prefers_linear():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     d = decide(
         link=_link(),
         issue=_issue(updated_at=now),
@@ -73,19 +73,19 @@ def test_tie_prefers_linear():
 
 
 def test_only_tt_ts():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     d = decide(link=_link(), issue=_issue(), tt=_tt(modified_time=now), new_hash="x")
     assert d.direction is Direction.TT_TO_LINEAR
 
 
 def test_only_linear_ts():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     d = decide(link=_link(), issue=_issue(updated_at=now), tt=_tt(), new_hash="x")
     assert d.direction is Direction.LINEAR_TO_TT
 
 
 def test_echo_drops_repeat():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     link = _link(
         hash_="h",
         echo_until_l=now + timedelta(seconds=10),
