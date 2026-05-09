@@ -222,7 +222,8 @@ def test_items_signature_status_sensitive():
 
 
 def test_column_delegated_maps_to_delegated_label():
-    assert mappers.map_column_to_label("📦 Делегировано") == "Delegated"
+    assert mappers.map_column_to_label("📦 Delegated") == "Delegated"
+    assert mappers.map_column_to_label("📦 Anything") == "Delegated"  # any 📦-prefixed column
     assert mappers.map_column_to_label("Rules") is None
     assert mappers.map_column_to_label(None) is None
 

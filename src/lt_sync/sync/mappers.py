@@ -261,7 +261,7 @@ def items_signature(items: list[TTChecklistItem]) -> str:
 
 
 def map_column_to_label(column_name: str | None) -> str | None:
-    """TickTick column name → Linear label name. Currently only Делегировано."""
+    """TickTick column name → Linear label name. v1: only the "Delegated" column."""
     if column_name is None:
         return None
     if column_name.strip().startswith("📦"):
