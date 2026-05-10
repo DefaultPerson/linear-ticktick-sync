@@ -43,8 +43,8 @@ class LinearClient:
                 "Content-Type": "application/json",
             },
         )
-        # Linear: ~1500/h complexity-based; conservative 30/min.
-        self._limiter = AsyncLimiter(max_rate=30, time_period=60)
+        # Linear: ~1500/h complexity-based, ~25 req/sec burst. 240/min keeps headroom.
+        self._limiter = AsyncLimiter(max_rate=240, time_period=60)
 
     async def __aenter__(self) -> LinearClient:
         return self

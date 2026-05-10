@@ -39,7 +39,7 @@ class TickTickClient:
     ) -> None:
         self._token_provider = token_provider
         self._client = httpx.AsyncClient(base_url=API_BASE, timeout=timeout)
-        self._limiter = AsyncLimiter(max_rate=60, time_period=60)
+        self._limiter = AsyncLimiter(max_rate=120, time_period=60)
 
     async def __aenter__(self) -> TickTickClient:
         return self
