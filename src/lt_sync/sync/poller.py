@@ -57,6 +57,10 @@ async def poll_once(ctx: SyncContext) -> dict[str, int]:
             counts["errors"] += 1
 
     # 2) Tombstone detection: links whose ttid is missing this round.
+    # NOTE: TickTick `/project/{id}/data` only returns active (status=0) tasks;
+    # completed (status=2) and wontDo (status=-1) are filtered server-side.
+    # Before tombstoning we probe the task directly — if it still exists, the
+    # link is fine and we just reset the miss counter.
     async with session_scope(ctx.sm) as session:
         active = await repo.list_active_links(session)
         for link in active:
@@ -64,14 +68,20 @@ async def poll_once(ctx: SyncContext) -> dict[str, int]:
                 await repo.reset_tt_miss(session, link)
                 continue
             misses = await repo.increment_tt_miss(session, link)
-            if misses >= TT_MISS_THRESHOLD:
-                await _tombstone_linear_issue(ctx, link.linear_id, link.ttid)
-                await repo.add_tombstone(
-                    session, side=Side.TICKTICK, linear_id=link.linear_id, ttid=link.ttid,
-                    note="tt_missing_2x",
-                )
-                await repo.mark_tombstoned(session, link)
-                counts["tombstoned"] += 1
+            if misses < TT_MISS_THRESHOLD:
+                continue
+            probe = await ctx.ticktick.get_task(ctx.settings.ticktick_list_id, link.ttid)
+            if probe is not None:
+                # Task exists but is hidden from the active list (completed / wontDo).
+                await repo.reset_tt_miss(session, link)
+                continue
+            await _tombstone_linear_issue(ctx, link.linear_id, link.ttid)
+            await repo.add_tombstone(
+                session, side=Side.TICKTICK, linear_id=link.linear_id, ttid=link.ttid,
+                note="tt_missing_2x",
+            )
+            await repo.mark_tombstoned(session, link)
+            counts["tombstoned"] += 1
     log.info("poll cycle done", **counts)
     return counts
 
