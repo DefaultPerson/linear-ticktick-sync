@@ -36,6 +36,7 @@ def make_scheduler(ctx: SyncContext) -> AsyncIOScheduler:
         id="linear_backfill",
         max_instances=1,
         coalesce=True,
+        next_run_time=datetime.now(tz=UTC) + timedelta(seconds=15),
     )
     sched.add_job(
         _token_expiry_check,
