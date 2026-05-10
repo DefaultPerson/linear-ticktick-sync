@@ -139,9 +139,14 @@ async def _apply_linear_to_tt(
         "projectId": tt.project_id,
         "title": issue.title,
     }
-    # Only mirror description if the user has changed it outside fence (preserve TT content).
-    # In v1 we don't push checklist edits back; keep tt.content untouched unless title only changed.
     payload["priority"] = mappers.linear_priority_to_tt(issue.priority)
+
+    # Mirror Linear description body to tt.content. The `## Subtasks` section
+    # is owned by TickTick (TT items are the source of truth in v1), so we
+    # strip it before comparing — Linear-side checklist edits are dropped.
+    body, _items = mappers.split_linear_description(issue.description)
+    if body != (tt.content or "").strip():
+        payload["content"] = body
 
     target_status = mappers.linear_state_to_tt_status(issue.state_type)
     if target_status != tt.status:

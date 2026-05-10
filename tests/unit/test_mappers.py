@@ -148,6 +148,30 @@ def test_parse_checklist_lines():
     assert parsed == [(False, "one"), (True, "two"), (True, "three")]
 
 
+def test_split_linear_description_body_and_items():
+    text = "Hello body line\nmore body\n\n## Subtasks\n- [ ] a\n- [x] b\n"
+    body, items = mappers.split_linear_description(text)
+    assert body == "Hello body line\nmore body"
+    assert items == [(False, "a"), (True, "b")]
+
+
+def test_split_linear_description_no_subtasks():
+    body, items = mappers.split_linear_description("just a paragraph\n")
+    assert body == "just a paragraph"
+    assert items == []
+
+
+def test_split_linear_description_empty():
+    assert mappers.split_linear_description(None) == ("", [])
+    assert mappers.split_linear_description("") == ("", [])
+
+
+def test_split_linear_description_only_subtasks():
+    body, items = mappers.split_linear_description("## Subtasks\n- [ ] x\n")
+    assert body == ""
+    assert items == [(False, "x")]
+
+
 # ─── Canonical hash ──────────────────────────────────────────────────────────
 
 

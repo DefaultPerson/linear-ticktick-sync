@@ -150,6 +150,7 @@ def strip_legacy_fence(description: str | None) -> str:
 
 
 _CHECK_RE = re.compile(r"^\s*-\s+\[(?P<m>[ xX])\]\s+(?P<title>.+?)\s*$")
+_SUBTASKS_HEADING_RE = re.compile(r"(?m)^##\s+Subtasks\s*$")
 
 
 def parse_checklist_lines(text: str) -> list[tuple[bool, str]]:
@@ -162,6 +163,21 @@ def parse_checklist_lines(text: str) -> list[tuple[bool, str]]:
         checked = m.group("m").lower() == "x"
         out.append((checked, m.group("title").strip()))
     return out
+
+
+def split_linear_description(text: str | None) -> tuple[str, list[tuple[bool, str]]]:
+    """Split a Linear description into (body, checklist).
+
+    The description is the inverse of `render_description`: an optional body
+    followed by `## Subtasks` and `- [ ]/[x]` lines. Anything before the
+    heading is `body`; lines after it are parsed as a checklist.
+    """
+    if not text:
+        return "", []
+    parts = _SUBTASKS_HEADING_RE.split(text, maxsplit=1)
+    body = parts[0].rstrip()
+    items = parse_checklist_lines(parts[1]) if len(parts) > 1 else []
+    return body, items
 
 
 # ─── TickTick title/content from Linear (when we create new TT task) ─────────
