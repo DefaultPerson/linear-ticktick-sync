@@ -56,24 +56,46 @@ async def poll_once(ctx: SyncContext) -> dict[str, int]:
             log.error("poll task failed", ttid=tt.id, error=str(exc))
             counts["errors"] += 1
 
-    # 2) Tombstone detection: links whose ttid is missing this round.
-    # NOTE: TickTick `/project/{id}/data` only returns active (status=0) tasks;
-    # completed (status=2) and wontDo (status=-1) are filtered server-side.
-    # Before tombstoning we probe the task directly — if it still exists, the
-    # link is fine and we just reset the miss counter.
+    # 2) Hidden-status reconciliation + tombstone detection.
+    # TickTick `/project/{id}/data` filters out status=2 (completed) and
+    # status=-1 (wontDo), so any link whose ttid is missing here may be:
+    #   (a) a completed/wontDo task — still alive, just hidden;
+    #   (b) actually deleted — then we tombstone the Linear issue.
+    # Probe each missing link directly: if the task exists, run `sync_pair`
+    # so the hidden status reaches Linear; otherwise increment miss counter.
     async with session_scope(ctx.sm) as session:
         active = await repo.list_active_links(session)
         for link in active:
             if link.ttid in seen_ttids:
                 await repo.reset_tt_miss(session, link)
                 continue
-            misses = await repo.increment_tt_miss(session, link)
-            if misses < TT_MISS_THRESHOLD:
-                continue
             probe = await ctx.ticktick.get_task(ctx.settings.ticktick_list_id, link.ttid)
             if probe is not None:
-                # Task exists but is hidden from the active list (completed / wontDo).
                 await repo.reset_tt_miss(session, link)
+                issue = issues_by_id.get(link.linear_id)
+                if issue is None:
+                    continue
+                try:
+                    delivery_id = (
+                        f"tt:{probe.id}:"
+                        f"{probe.modified_time.isoformat() if probe.modified_time else 'na'}"
+                    )
+                    decision = await sync_pair(
+                        ctx,
+                        issue=issue,
+                        tt=probe,
+                        inbound=Direction.TT_TO_LINEAR,
+                        delivery_id=delivery_id,
+                        source=EventSource.TT_POLL,
+                    )
+                    if decision.direction.value != "noop":
+                        counts["updated"] += 1
+                except Exception as exc:
+                    log.error("hidden tt sync failed", ttid=link.ttid, error=str(exc))
+                    counts["errors"] += 1
+                continue
+            misses = await repo.increment_tt_miss(session, link)
+            if misses < TT_MISS_THRESHOLD:
                 continue
             await _tombstone_linear_issue(ctx, link.linear_id, link.ttid)
             await repo.add_tombstone(
