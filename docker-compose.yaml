@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     # Env vars come from Coolify (or `docker compose --env-file .env up`).
     environment:
+      # Coolify magic var — generates Traefik labels for service `lt-sync` on port 8000.
+      SERVICE_FQDN_LT_SYNC_8000: ${SERVICE_FQDN_LT_SYNC_8000}
       DATABASE_URL: sqlite+aiosqlite:////data/state.db
       LINEAR_API_KEY: ${LINEAR_API_KEY}
       LINEAR_TEAM_KEY: ${LINEAR_TEAM_KEY:-HMC}
