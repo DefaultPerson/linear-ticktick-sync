@@ -162,8 +162,11 @@ async def _apply_linear_to_tt(
 
     if issue.due_date != _tt_due_to_linear_date(tt.due_date):
         if issue.due_date:
-            # Linear stores date-only; TT stores date+time. Preserve TT's
-            # time-of-day and timezone tail when present, only swap the date.
+            # Linear stores date-only; TT stores date+time and has a separate
+            # startDate. Preserve TT's time-of-day / timezone tails on both
+            # ends; only swap the YYYY-MM-DD prefix.
+            if tt.start_date and len(tt.start_date) >= 10:
+                payload["startDate"] = f"{issue.due_date}{tt.start_date[10:]}"
             if tt.due_date and len(tt.due_date) >= 10:
                 payload["dueDate"] = f"{issue.due_date}{tt.due_date[10:]}"
             else:
@@ -179,7 +182,8 @@ async def _apply_linear_to_tt(
                 except ValueError:
                     pass
         else:
-            # Linear cleared the due date — propagate the clear to TT.
+            # Linear cleared the due date — clear both ends in TT.
+            payload["startDate"] = None
             payload["dueDate"] = None
 
     updated = await ctx.ticktick.update_task(tt.id, payload)
