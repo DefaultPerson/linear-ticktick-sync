@@ -162,17 +162,22 @@ async def _apply_linear_to_tt(
 
     if issue.due_date != _tt_due_to_linear_date(tt.due_date):
         if issue.due_date:
-            from datetime import date, datetime
+            # Linear stores date-only; TT stores date+time. Preserve TT's
+            # time-of-day and timezone tail when present, only swap the date.
+            if tt.due_date and len(tt.due_date) >= 10:
+                payload["dueDate"] = f"{issue.due_date}{tt.due_date[10:]}"
+            else:
+                from datetime import date, datetime
 
-            try:
-                d = date.fromisoformat(issue.due_date)
-                iso = datetime(d.year, d.month, d.day, tzinfo=UTC).isoformat(
-                    timespec="milliseconds"
-                )
-                payload["dueDate"] = iso.replace("+00:00", "+0000")
-                payload["isAllDay"] = True
-            except ValueError:
-                pass
+                try:
+                    d = date.fromisoformat(issue.due_date)
+                    iso = datetime(d.year, d.month, d.day, tzinfo=UTC).isoformat(
+                        timespec="milliseconds"
+                    )
+                    payload["dueDate"] = iso.replace("+00:00", "+0000")
+                    payload["isAllDay"] = True
+                except ValueError:
+                    pass
         else:
             # Linear cleared the due date — propagate the clear to TT.
             payload["dueDate"] = None
