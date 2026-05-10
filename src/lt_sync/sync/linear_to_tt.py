@@ -46,7 +46,10 @@ async def create_tt_for_linear(ctx: SyncContext, issue: LinearIssue) -> str | No
     label_ids = list(issue.label_ids)
     if ctx.sync_label.id not in label_ids:
         label_ids.append(ctx.sync_label.id)
-    description = mappers.merge_with_existing_description(tt, issue.description)
+    # On creation: replace Linear description entirely with the fenced block.
+    # The original Linear text is already mirrored into tt.content (and thus into
+    # the fence body), so preserving it outside the fence would duplicate it.
+    description = mappers.render_fenced_description(tt)
     refreshed = await ctx.linear.update_issue(
         issue.id, description=description, label_ids=label_ids
     )
