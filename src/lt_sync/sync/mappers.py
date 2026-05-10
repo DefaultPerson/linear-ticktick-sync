@@ -119,18 +119,15 @@ class FencedBlock:
 
 
 def render_fenced_body(tt: TTTask) -> str:
-    """Inner content of the fenced block — what we own."""
+    """Inner content of the fenced block. Only the user-visible payload —
+    metadata (source / due / column) lives in Linear's native fields and
+    needn't be duplicated here."""
     parts: list[str] = []
-    parts.append("> Source: TickTick · 🐍HM&Trade")
-    if tt.due_date:
-        parts.append(f"> Due: {tt.due_date}")
-    if tt.column_id:
-        parts.append(f"> Column: {tt.column_id}")
-    parts.append("")
     if tt.content:
         parts.append(tt.content.strip())
     if tt.items:
-        parts.append("")
+        if parts:
+            parts.append("")
         parts.append("## Subtasks")
         for it in tt.items:
             mark = "x" if it.status == 1 else " "
