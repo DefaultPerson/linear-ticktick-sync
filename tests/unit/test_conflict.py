@@ -1,4 +1,4 @@
-"""Tests for last-writer-wins conflict resolver."""
+"""Tests for conflict resolver: hash-match short-circuit + inbound-trust."""
 
 from __future__ import annotations
 
@@ -35,67 +35,73 @@ def _link(hash_: str | None = None, **kw) -> Link:  # type: ignore[no-untyped-de
 
 def test_noop_when_hash_matches():
     link = _link("matching")
-    d = decide(link=link, issue=_issue(), tt=_tt(), new_hash="matching")
+    d = decide(link=link, issue=_issue(), tt=_tt(), new_hash="matching", inbound=Direction.LINEAR_TO_TT)
     assert d.direction is Direction.NOOP
+    assert d.reason == "hash_match"
 
 
-def test_tt_newer_wins():
+def test_inbound_linear_wins():
+    d = decide(link=_link(), issue=_issue(), tt=_tt(), new_hash="x", inbound=Direction.LINEAR_TO_TT)
+    assert d.direction is Direction.LINEAR_TO_TT
+    assert d.reason == "inbound"
+
+
+def test_inbound_tt_wins_even_without_modified_time():
+    """TickTick OpenAPI v1 doesn't expose modifiedTime; inbound must be the signal."""
+    d = decide(link=_link(), issue=_issue(updated_at=datetime.now(UTC)), tt=_tt(), new_hash="x", inbound=Direction.TT_TO_LINEAR)
+    assert d.direction is Direction.TT_TO_LINEAR
+    assert d.reason == "inbound"
+
+
+def test_echo_drops_linear_inbound_during_echo_l():
+    now = datetime.now(UTC)
+    link = _link(echo_until_l=now + timedelta(seconds=10))
+    d = decide(link=link, issue=_issue(), tt=_tt(), new_hash="x", inbound=Direction.LINEAR_TO_TT, now=now)
+    assert d.direction is Direction.NOOP
+    assert d.reason == "echo_l"
+
+
+def test_echo_drops_tt_inbound_during_echo_t():
+    now = datetime.now(UTC)
+    link = _link(echo_until_t=now + timedelta(seconds=10))
+    d = decide(link=link, issue=_issue(), tt=_tt(), new_hash="x", inbound=Direction.TT_TO_LINEAR, now=now)
+    assert d.direction is Direction.NOOP
+    assert d.reason == "echo_t"
+
+
+def test_echo_does_not_block_opposite_direction():
+    """echo_until_l should only suppress LINEAR_TO_TT inbound, not TT_TO_LINEAR."""
+    now = datetime.now(UTC)
+    link = _link(echo_until_l=now + timedelta(seconds=10))
+    d = decide(link=link, issue=_issue(), tt=_tt(), new_hash="x", inbound=Direction.TT_TO_LINEAR, now=now)
+    assert d.direction is Direction.TT_TO_LINEAR
+
+
+def test_cold_start_timestamp_tiebreak_tt_newer():
     now = datetime.now(UTC)
     d = decide(
         link=_link(),
         issue=_issue(updated_at=now - timedelta(hours=1)),
         tt=_tt(modified_time=now),
         new_hash="x",
+        inbound=None,
     )
     assert d.direction is Direction.TT_TO_LINEAR
 
 
-def test_linear_newer_wins():
+def test_cold_start_timestamp_tiebreak_linear_newer():
     now = datetime.now(UTC)
     d = decide(
         link=_link(),
         issue=_issue(updated_at=now),
         tt=_tt(modified_time=now - timedelta(hours=1)),
         new_hash="x",
+        inbound=None,
     )
     assert d.direction is Direction.LINEAR_TO_TT
 
 
-def test_tie_prefers_linear():
-    now = datetime.now(UTC)
-    d = decide(
-        link=_link(),
-        issue=_issue(updated_at=now),
-        tt=_tt(modified_time=now),
-        new_hash="x",
-    )
+def test_cold_start_no_timestamps_falls_back_default():
+    d = decide(link=_link(), issue=_issue(), tt=_tt(), new_hash="x", inbound=None)
     assert d.direction is Direction.LINEAR_TO_TT
-
-
-def test_only_tt_ts():
-    now = datetime.now(UTC)
-    d = decide(link=_link(), issue=_issue(), tt=_tt(modified_time=now), new_hash="x")
-    assert d.direction is Direction.TT_TO_LINEAR
-
-
-def test_only_linear_ts():
-    now = datetime.now(UTC)
-    d = decide(link=_link(), issue=_issue(updated_at=now), tt=_tt(), new_hash="x")
-    assert d.direction is Direction.LINEAR_TO_TT
-
-
-def test_echo_drops_repeat():
-    now = datetime.now(UTC)
-    link = _link(
-        hash_="h",
-        echo_until_l=now + timedelta(seconds=10),
-    )
-    # Inbound from TT, but the observed hash matches our last-written hash.
-    d = decide(link=link, issue=_issue(), tt=_tt(), new_hash="h", inbound=Direction.TT_TO_LINEAR)
-    # echo applies only when inbound side matches the stored hash; check explicit match path
-    assert d.direction is Direction.NOOP
-
-
-def test_no_timestamps_falls_back_to_inbound():
-    d = decide(link=_link(), issue=_issue(), tt=_tt(), new_hash="x", inbound=Direction.TT_TO_LINEAR)
-    assert d.direction is Direction.TT_TO_LINEAR
+    assert d.reason == "fallback_default"
