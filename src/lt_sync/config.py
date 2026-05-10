@@ -47,7 +47,7 @@ class Settings(BaseSettings):
         default="sqlite+aiosqlite:///./data/state.db",
         description="SQLAlchemy async URL",
     )
-    poll_interval_sec: int = Field(default=180, ge=30, le=3600)
+    poll_interval_sec: int = Field(default=180, ge=10, le=3600)
     linear_backfill_interval_sec: int = Field(default=3600, ge=60)
     token_check_interval_sec: int = Field(default=86400, ge=3600)
     echo_window_sec: int = Field(default=30, ge=5, le=600)
