@@ -154,7 +154,7 @@ def test_parse_checklist_lines():
 def test_canonical_hash_stable():
     h1 = mappers.canonical_hash(
         linear_title="t",
-        description_inside_fence="d",
+        rendered_description="d",
         state_type="started",
         priority=2,
         tt_title="t",
@@ -167,7 +167,7 @@ def test_canonical_hash_stable():
     )
     h2 = mappers.canonical_hash(
         linear_title="t",
-        description_inside_fence="d",
+        rendered_description="d",
         state_type="started",
         priority=2,
         tt_title="t",
@@ -184,7 +184,7 @@ def test_canonical_hash_stable():
 def test_canonical_hash_changes_with_title():
     h1 = mappers.canonical_hash(
         linear_title="t1",
-        description_inside_fence="",
+        rendered_description="",
         state_type="unstarted",
         priority=0,
         tt_title="t1",
@@ -197,7 +197,7 @@ def test_canonical_hash_changes_with_title():
     )
     h2 = mappers.canonical_hash(
         linear_title="t2",
-        description_inside_fence="",
+        rendered_description="",
         state_type="unstarted",
         priority=0,
         tt_title="t2",

@@ -52,10 +52,16 @@ def _label_by_name(team: LinearTeam, name: str) -> LinearLabel | None:
 
 
 def compute_hash(issue: LinearIssue, tt: TTTask) -> str:
-    """Canonical hash from joint Linear+TickTick state."""
+    """Canonical hash from joint Linear+TickTick state.
+
+    Uses what the rendered Linear description SHOULD look like, then compares
+    that against the actual `issue.description` indirectly: we hash the
+    rendered version, so if the actual stored description differs (e.g. still
+    carries legacy fence markers), the next sync will rewrite it.
+    """
     return mappers.canonical_hash(
         linear_title=issue.title,
-        description_inside_fence=mappers.strip_legacy_fence(issue.description),
+        rendered_description=(issue.description or "").strip(),
         state_type=issue.state_type,
         priority=issue.priority,
         tt_title=tt.title,
