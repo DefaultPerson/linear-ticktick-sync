@@ -9,6 +9,7 @@ Detects:
 
 from __future__ import annotations
 
+from lt_sync.linear.types import LinearIssue
 from lt_sync.logging_setup import log
 from lt_sync.state import repo
 from lt_sync.state.db import session_scope
@@ -34,15 +35,23 @@ async def poll_once(ctx: SyncContext) -> dict[str, int]:
         log.error("poll TT fetch failed", error=str(exc))
         return counts
     counts["polled"] = len(data.tasks)
-    log.info("poll fetched", count=len(data.tasks))
     cols = _column_lookup(data)
-
     seen_ttids: set[str] = {t.id for t in data.tasks}
 
-    # 1) Per-task: ensure link, then sync.
+    # Bulk-fetch linked Linear issues — one GraphQL call instead of N find_issue_by_id.
+    try:
+        all_issues = await ctx.linear.list_team_issues(
+            ctx.settings.linear_team_key, project_id=ctx.project.id, limit=250
+        )
+    except Exception as exc:
+        log.error("poll Linear fetch failed", error=str(exc))
+        return counts
+    issues_by_id = {i.id: i for i in all_issues}
+    log.info("poll fetched", tt_count=len(data.tasks), linear_count=len(all_issues))
+
     for tt in data.tasks:
         try:
-            await _process_tt_task(ctx, tt, cols, counts)
+            await _process_tt_task(ctx, tt, cols, counts, issues_by_id)
         except Exception as exc:
             log.error("poll task failed", ttid=tt.id, error=str(exc))
             counts["errors"] += 1
@@ -72,6 +81,7 @@ async def _process_tt_task(
     tt: TTTask,
     cols: dict[str, str],
     counts: dict[str, int],
+    issues_by_id: dict[str, LinearIssue],
 ) -> None:
     async with session_scope(ctx.sm) as session:
         link = await repo.get_link_by_ttid(session, tt.id)
@@ -80,7 +90,7 @@ async def _process_tt_task(
         counts["created"] += 1
         return
 
-    issue = await ctx.linear.find_issue_by_id(link.linear_id)
+    issue = issues_by_id.get(link.linear_id)
     if issue is None:
         log.warning("linear issue missing for link; will tombstone", linear_id=link.linear_id)
         async with session_scope(ctx.sm) as session:
