@@ -30,7 +30,7 @@ async def poll_once(ctx: SyncContext) -> dict[str, int]:
     counts = {"polled": 0, "created": 0, "updated": 0, "tombstoned": 0, "errors": 0}
     try:
         data = await ctx.ticktick.get_project_data(ctx.settings.ticktick_list_id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("poll TT fetch failed", error=str(exc))
         return counts
     counts["polled"] = len(data.tasks)
@@ -110,7 +110,7 @@ async def _create_linear_for_tt(ctx: SyncContext, tt: TTTask, cols: dict[str, st
     """Create a new Linear issue mirroring this TT task and store the link."""
     state = mappers.pick_linear_state_from_tt(tt.status, states=ctx.team.states, current=None)
     priority = mappers.tt_priority_to_linear(tt.priority)
-    description = mappers.render_fenced_description(tt)
+    description = mappers.render_description(tt)
 
     label_ids = [ctx.sync_label.id]
     column_label = mappers.map_column_to_label(cols.get(tt.column_id or ""))

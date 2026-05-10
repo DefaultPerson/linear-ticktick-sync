@@ -46,10 +46,7 @@ async def create_tt_for_linear(ctx: SyncContext, issue: LinearIssue) -> str | No
     label_ids = list(issue.label_ids)
     if ctx.sync_label.id not in label_ids:
         label_ids.append(ctx.sync_label.id)
-    # On creation: replace Linear description entirely with the fenced block.
-    # The original Linear text is already mirrored into tt.content (and thus into
-    # the fence body), so preserving it outside the fence would duplicate it.
-    description = mappers.render_fenced_description(tt)
+    description = mappers.render_description(tt)
     refreshed = await ctx.linear.update_issue(
         issue.id, description=description, label_ids=label_ids
     )
@@ -67,6 +64,5 @@ async def create_tt_for_linear(ctx: SyncContext, issue: LinearIssue) -> str | No
 
 
 def _strip_fence(description: str | None) -> str:
-    """Strip our fenced block (if any) so we don't recursively echo it into TT.content."""
-    _, outside = mappers.split_outside_fence(description)
-    return outside.strip()
+    """Strip any legacy fence markers so the value is safe for TT.content."""
+    return mappers.strip_legacy_fence(description)

@@ -210,7 +210,7 @@ async def _link_existing(
     if issue is None or tt is None:
         return
 
-    description = mappers.merge_with_existing_description(tt, issue.description)
+    description = mappers.render_description(tt)
     label_ids = list(issue.label_ids)
     if ctx.sync_label.id not in label_ids:
         label_ids.append(ctx.sync_label.id)
@@ -245,7 +245,7 @@ async def _create_linear(
         return
     state = mappers.pick_linear_state_from_tt(tt.status, states=ctx.team.states, current=None)
     priority = mappers.tt_priority_to_linear(tt.priority)
-    description = mappers.render_fenced_description(tt)
+    description = mappers.render_description(tt)
     due = tt.due_date[:10] if tt.due_date and len(tt.due_date) >= 10 else None
 
     issue = await ctx.linear.create_issue(

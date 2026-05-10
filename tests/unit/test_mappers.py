@@ -116,35 +116,27 @@ def _sample_tt() -> TTTask:
     )
 
 
-def test_render_fenced_includes_marker_and_subtasks():
-    tt = _sample_tt()
-    rendered = mappers.render_fenced_description(tt)
-    assert "<!-- ticktick-sync:start ttid=abc123 -->" in rendered
-    assert "<!-- ticktick-sync:end -->" in rendered
+def test_render_description_no_markers():
+    rendered = mappers.render_description(_sample_tt())
+    assert "<!--" not in rendered
+    assert "ticktick-sync" not in rendered
     assert "## Subtasks" in rendered
     assert "- [x] step 1" in rendered
     assert "- [ ] step 2" in rendered
 
 
-def test_split_outside_fence_returns_user_text():
-    desc = "user text\n<!-- ticktick-sync:start ttid=x -->\nbody\n<!-- ticktick-sync:end -->\nmore user text"
-    block, outside = mappers.split_outside_fence(desc)
-    assert block is not None and block.ttid == "x"
-    assert "user text" in outside and "more user text" in outside
+def test_strip_legacy_fence_drops_markers_and_dedupes_outside():
+    legacy = "<!-- ticktick-sync:start ttid=x -->\nbody A\n<!-- ticktick-sync:end -->\n\nbody A"
+    assert mappers.strip_legacy_fence(legacy) == "body A"
 
 
-def test_merge_preserves_outside_text():
-    existing = "<!-- ticktick-sync:start ttid=abc123 -->\nold\n<!-- ticktick-sync:end -->\n\nMy private notes"
-    tt = _sample_tt()
-    merged = mappers.merge_with_existing_description(tt, existing)
-    assert "My private notes" in merged
-    assert "## Subtasks" in merged
+def test_strip_legacy_fence_keeps_distinct_outside_text():
+    legacy = "<!-- ticktick-sync:start ttid=x -->\nA\n<!-- ticktick-sync:end -->\n\nB"
+    assert mappers.strip_legacy_fence(legacy) == "A\n\nB"
 
 
-def test_split_no_fence_returns_full_text():
-    block, outside = mappers.split_outside_fence("just plain text")
-    assert block is None
-    assert outside == "just plain text"
+def test_strip_legacy_fence_no_markers_returns_input():
+    assert mappers.strip_legacy_fence("plain") == "plain"
 
 
 # ─── Checklist parser ────────────────────────────────────────────────────────

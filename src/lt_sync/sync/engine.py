@@ -53,11 +53,9 @@ def _label_by_name(team: LinearTeam, name: str) -> LinearLabel | None:
 
 def compute_hash(issue: LinearIssue, tt: TTTask) -> str:
     """Canonical hash from joint Linear+TickTick state."""
-    block, _ = mappers.split_outside_fence(issue.description)
-    inside = block.body if block else ""
     return mappers.canonical_hash(
         linear_title=issue.title,
-        description_inside_fence=inside,
+        description_inside_fence=mappers.strip_legacy_fence(issue.description),
         state_type=issue.state_type,
         priority=issue.priority,
         tt_title=tt.title,
@@ -83,7 +81,7 @@ async def _apply_tt_to_linear(
     target_priority = mappers.tt_priority_to_linear(
         tt.priority, current_linear_priority=issue.priority
     )
-    description = mappers.merge_with_existing_description(tt, issue.description)
+    description = mappers.render_description(tt)
 
     label_ids = list(issue.label_ids)
     # Always carry the sync marker.
@@ -186,10 +184,12 @@ async def sync_pair(
             # Idempotency only for explicit-delivery sources (e.g. Linear webhooks).
             # TickTick poll has no per-event id (no modifiedTime), so we rely on
             # canonical-hash dedup inside `decide()` instead.
-            if source not in {EventSource.TT_POLL, EventSource.LINEAR_BACKFILL}:
-                if await repo.event_seen(session, source, delivery_id):
-                    log.debug("event already processed", source=source.value, delivery_id=delivery_id)
-                    return Decision(Direction.NOOP, "duplicate_delivery")
+            if source not in {
+                EventSource.TT_POLL,
+                EventSource.LINEAR_BACKFILL,
+            } and await repo.event_seen(session, source, delivery_id):
+                log.debug("event already processed", source=source.value, delivery_id=delivery_id)
+                return Decision(Direction.NOOP, "duplicate_delivery")
 
             link = await repo.get_link_by_linear(session, issue.id)
             if link is None:

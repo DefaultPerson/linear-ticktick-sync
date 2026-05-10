@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 from lt_sync.linear.types import LinearIssue, LinearState
@@ -102,26 +101,23 @@ def _clamp_tt_priority(p: int) -> int:
     return min(buckets, key=lambda b: abs(b - p))
 
 
-# ─── Description / fenced block ──────────────────────────────────────────────
+# ─── Description rendering ──────────────────────────────────────────────────
+#
+# Linear's Markdown renderer treats HTML comments as visible text, so we can't
+# hide a `<!-- ttid=… -->` marker inside the description. Identification of
+# synced issues lives instead in the `ticktick-sync` label + the `link` row
+# (linear_id → ttid). The description therefore contains only the user-visible
+# payload from TickTick (content + checklist) and is fully rewritten on every
+# sync — Linear-side edits to the description body are NOT preserved.
 
-_FENCE_START = "<!-- ticktick-sync:start"
-_FENCE_END = "<!-- ticktick-sync:end -->"
-_FENCE_RE = re.compile(
-    r"<!-- ticktick-sync:start(?: ttid=(?P<ttid>[^ >]+))? -->\n?(?P<body>.*?)\n?<!-- ticktick-sync:end -->",
+_LEGACY_FENCE_RE = re.compile(
+    r"<!-- ticktick-sync:start(?: ttid=[^ >]+)? -->\n?(?P<body>.*?)\n?<!-- ticktick-sync:end -->",
     re.DOTALL,
 )
 
 
-@dataclass(slots=True)
-class FencedBlock:
-    ttid: str | None
-    body: str  # content between markers (excluding markers themselves)
-
-
-def render_fenced_body(tt: TTTask) -> str:
-    """Inner content of the fenced block. Only the user-visible payload —
-    metadata (source / due / column) lives in Linear's native fields and
-    needn't be duplicated here."""
+def render_description(tt: TTTask) -> str:
+    """Linear description from a TickTick task: content + checklist (no markers)."""
     parts: list[str] = []
     if tt.content:
         parts.append(tt.content.strip())
@@ -135,30 +131,19 @@ def render_fenced_body(tt: TTTask) -> str:
     return "\n".join(parts).rstrip()
 
 
-def render_fenced_description(tt: TTTask, *, existing_outside: str = "") -> str:
-    """Linear description = our fenced block + (optional) user-owned text after."""
-    body = render_fenced_body(tt)
-    block = f"{_FENCE_START} ttid={tt.id} -->\n{body}\n{_FENCE_END}"
-    if existing_outside.strip():
-        return f"{block}\n\n{existing_outside.strip()}"
-    return block
-
-
-def split_outside_fence(description: str | None) -> tuple[FencedBlock | None, str]:
-    """Return (fenced_block, outside_text). Strips the fenced block from description."""
+def strip_legacy_fence(description: str | None) -> str:
+    """Best-effort removal of legacy <!-- ticktick-sync:* --> markers from older issues."""
     if not description:
-        return None, ""
-    m = _FENCE_RE.search(description)
+        return ""
+    m = _LEGACY_FENCE_RE.search(description)
     if not m:
-        return None, description
-    block = FencedBlock(ttid=m.group("ttid"), body=m.group("body"))
+        return description.strip()
+    body = (m.group("body") or "").strip()
     outside = (description[: m.start()] + description[m.end() :]).strip()
-    return block, outside
-
-
-def merge_with_existing_description(tt: TTTask, existing: str | None) -> str:
-    _, outside = split_outside_fence(existing)
-    return render_fenced_description(tt, existing_outside=outside)
+    if outside:
+        # Drop outside text if it duplicates the fenced body (legacy bug).
+        return body if body in outside or outside in body else f"{body}\n\n{outside}"
+    return body
 
 
 # ─── Checklist round-trip (TT items → markdown, markdown → diff plan) ────────
@@ -211,9 +196,8 @@ def linear_to_tt_payload(
 
 
 def _strip_fenced(description: str | None) -> str:
-    """Return description with our fenced block removed (so we don't recursively inject it)."""
-    _, outside = split_outside_fence(description)
-    return outside.strip()
+    """Strip any legacy fence markers from a description before sending to TT."""
+    return strip_legacy_fence(description)
 
 
 # ─── Canonical hash for echo / loop prevention ───────────────────────────────
