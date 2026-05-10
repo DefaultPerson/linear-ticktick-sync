@@ -205,16 +205,19 @@ async def sync_pair(
             new_hash = compute_hash(issue, tt)
             decision = decide(link=link, issue=issue, tt=tt, new_hash=new_hash, inbound=inbound)
 
+            log_event = source not in {EventSource.TT_POLL, EventSource.LINEAR_BACKFILL}
+
             if decision.direction is Direction.NOOP:
                 log.debug("sync noop", ident=issue.identifier, ttid=tt.id, reason=decision.reason)
-                await repo.record_event(
-                    session,
-                    source=source,
-                    delivery_id=delivery_id,
-                    payload_hash=new_hash,
-                    action="noop",
-                    link_id=link.id,
-                )
+                if log_event:
+                    await repo.record_event(
+                        session,
+                        source=source,
+                        delivery_id=delivery_id,
+                        payload_hash=new_hash,
+                        action="noop",
+                        link_id=link.id,
+                    )
                 return decision
 
             try:
@@ -239,25 +242,27 @@ async def sync_pair(
                         echo_window=timedelta(seconds=ctx.settings.echo_window_sec),
                     )
                 action = decision.direction.value
-                await repo.record_event(
-                    session,
-                    source=source,
-                    delivery_id=delivery_id,
-                    payload_hash=new_hash,
-                    action=action,
-                    link_id=link.id,
-                )
+                if log_event:
+                    await repo.record_event(
+                        session,
+                        source=source,
+                        delivery_id=delivery_id,
+                        payload_hash=new_hash,
+                        action=action,
+                        link_id=link.id,
+                    )
                 log.info("synced", direction=action, ident=issue.identifier, ttid=tt.id, reason=decision.reason)
             except Exception as exc:
-                await repo.record_event(
-                    session,
-                    source=source,
-                    delivery_id=delivery_id,
-                    payload_hash=new_hash,
-                    action="error",
-                    error=str(exc)[:512],
-                    link_id=link.id,
-                )
+                if log_event:
+                    await repo.record_event(
+                        session,
+                        source=source,
+                        delivery_id=delivery_id,
+                        payload_hash=new_hash,
+                        action="error",
+                        error=str(exc)[:512],
+                        link_id=link.id,
+                    )
                 log.error("sync failed", direction=decision.direction.value, error=str(exc))
                 raise
         return decision
