@@ -161,19 +161,27 @@ def test_parse_checklist_lines():
 
 def test_canonical_hash_stable():
     h1 = mappers.canonical_hash(
-        title="t",
+        linear_title="t",
         description_inside_fence="d",
         state_type="started",
         priority=2,
+        tt_title="t",
+        tt_content="",
+        tt_due_date=None,
+        tt_column_id=None,
         tt_status=0,
         tt_priority=5,
         tt_items_signature="sig",
     )
     h2 = mappers.canonical_hash(
-        title="t",
+        linear_title="t",
         description_inside_fence="d",
         state_type="started",
         priority=2,
+        tt_title="t",
+        tt_content="",
+        tt_due_date=None,
+        tt_column_id=None,
         tt_status=0,
         tt_priority=5,
         tt_items_signature="sig",
@@ -183,19 +191,27 @@ def test_canonical_hash_stable():
 
 def test_canonical_hash_changes_with_title():
     h1 = mappers.canonical_hash(
-        title="t1",
+        linear_title="t1",
         description_inside_fence="",
         state_type="unstarted",
         priority=0,
+        tt_title="t1",
+        tt_content="",
+        tt_due_date=None,
+        tt_column_id=None,
         tt_status=0,
         tt_priority=0,
         tt_items_signature="",
     )
     h2 = mappers.canonical_hash(
-        title="t2",
+        linear_title="t2",
         description_inside_fence="",
         state_type="unstarted",
         priority=0,
+        tt_title="t2",
+        tt_content="",
+        tt_due_date=None,
+        tt_column_id=None,
         tt_status=0,
         tt_priority=0,
         tt_items_signature="",

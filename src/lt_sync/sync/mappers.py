@@ -224,25 +224,35 @@ def _strip_fenced(description: str | None) -> str:
 
 def canonical_hash(
     *,
-    title: str,
+    linear_title: str,
     description_inside_fence: str,
     state_type: str,
     priority: int,
+    tt_title: str,
+    tt_content: str,
+    tt_due_date: str | None,
+    tt_column_id: str | None,
     tt_status: int,
     tt_priority: int,
     tt_items_signature: str,
 ) -> str:
-    """Deterministic hash combining the syncable joint state.
+    """Deterministic hash of the syncable joint state across both sides.
 
-    `description_inside_fence` is the content between fence markers only (not the
-    full Linear description), so user edits outside the fence don't trigger sync.
+    Drift on either side (Linear or TickTick) flips the hash so the next event
+    or poll cycle triggers a sync. `description_inside_fence` is the Linear
+    description's fenced-block body only, so user edits outside the fence are
+    invisible to sync.
     """
     payload = "|".join(
         [
-            title.strip(),
+            linear_title.strip(),
             description_inside_fence.strip(),
             state_type,
             str(priority),
+            tt_title.strip(),
+            tt_content.strip(),
+            (tt_due_date or "")[:10],
+            tt_column_id or "",
             str(tt_status),
             str(tt_priority),
             tt_items_signature,

@@ -56,10 +56,14 @@ def compute_hash(issue: LinearIssue, tt: TTTask) -> str:
     block, _ = mappers.split_outside_fence(issue.description)
     inside = block.body if block else ""
     return mappers.canonical_hash(
-        title=issue.title,
+        linear_title=issue.title,
         description_inside_fence=inside,
         state_type=issue.state_type,
         priority=issue.priority,
+        tt_title=tt.title,
+        tt_content=tt.content or "",
+        tt_due_date=tt.due_date,
+        tt_column_id=tt.column_id,
         tt_status=tt.status,
         tt_priority=tt.priority,
         tt_items_signature=mappers.items_signature(tt.items),
