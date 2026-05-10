@@ -64,6 +64,7 @@ def compute_hash(issue: LinearIssue, tt: TTTask) -> str:
         rendered_description=(issue.description or "").strip(),
         state_type=issue.state_type,
         priority=issue.priority,
+        linear_due_date=issue.due_date,
         tt_title=tt.title,
         tt_content=tt.content or "",
         tt_due_date=tt.due_date,
@@ -159,18 +160,22 @@ async def _apply_linear_to_tt(
         else:
             payload["status"] = mappers.TT_OPEN
 
-    if issue.due_date and issue.due_date != _tt_due_to_linear_date(tt.due_date):
-        from datetime import date, datetime
+    if issue.due_date != _tt_due_to_linear_date(tt.due_date):
+        if issue.due_date:
+            from datetime import date, datetime
 
-        try:
-            d = date.fromisoformat(issue.due_date)
-            iso = datetime(d.year, d.month, d.day, tzinfo=UTC).isoformat(
-                timespec="milliseconds"
-            )
-            payload["dueDate"] = iso.replace("+00:00", "+0000")
-            payload["isAllDay"] = True
-        except ValueError:
-            pass
+            try:
+                d = date.fromisoformat(issue.due_date)
+                iso = datetime(d.year, d.month, d.day, tzinfo=UTC).isoformat(
+                    timespec="milliseconds"
+                )
+                payload["dueDate"] = iso.replace("+00:00", "+0000")
+                payload["isAllDay"] = True
+            except ValueError:
+                pass
+        else:
+            # Linear cleared the due date — propagate the clear to TT.
+            payload["dueDate"] = None
 
     updated = await ctx.ticktick.update_task(tt.id, payload)
     return updated
