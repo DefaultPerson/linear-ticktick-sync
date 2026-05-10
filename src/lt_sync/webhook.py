@@ -82,7 +82,11 @@ async def linear_webhook(
     async with session_scope(ctx.sm) as session:
         link = await repo.get_link_by_linear(session, issue_id)
     if link is None:
-        return {"ok": True, "skipped": "no_link_yet"}
+        # New (or moved) Linear issue in our project — mirror to TickTick.
+        from lt_sync.sync.linear_to_tt import create_tt_for_linear
+
+        ttid = await create_tt_for_linear(ctx, issue)
+        return {"ok": True, "created_tt": ttid}
 
     tt = await ctx.ticktick.get_task(ctx.settings.ticktick_list_id, link.ttid)
     if tt is None:

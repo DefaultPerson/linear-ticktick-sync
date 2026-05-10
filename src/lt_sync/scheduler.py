@@ -51,22 +51,30 @@ def make_scheduler(ctx: SyncContext) -> AsyncIOScheduler:
 
 
 async def _linear_backfill(ctx: SyncContext) -> None:
-    """Defensive: scan Linear issues with our sync label and re-evaluate against TT."""
+    """Hourly: scan project `hm` issues, mirror missing ones to TickTick + re-eval."""
     issues = await ctx.linear.list_team_issues(
         ctx.settings.linear_team_key, project_id=ctx.project.id, limit=250
     )
     log.info("linear backfill", count=len(issues))
+    from lt_sync.state.models import EventSource
+    from lt_sync.sync.conflict import Direction
+    from lt_sync.sync.engine import sync_pair
+    from lt_sync.sync.linear_to_tt import create_tt_for_linear
+
     for issue in issues:
         async with session_scope(ctx.sm) as session:
             link = await repo.get_link_by_linear(session, issue.id)
-        if link is None or link.tombstoned:
+        if link is None:
+            try:
+                await create_tt_for_linear(ctx, issue)
+            except Exception as exc:
+                log.warning("backfill create-tt failed", ident=issue.identifier, error=str(exc))
+            continue
+        if link.tombstoned:
             continue
         tt = await ctx.ticktick.get_task(ctx.settings.ticktick_list_id, link.ttid)
         if tt is None:
             continue
-        from lt_sync.state.models import EventSource
-        from lt_sync.sync.conflict import Direction
-        from lt_sync.sync.engine import sync_pair
 
         delivery = f"backfill:{issue.id}:{int(datetime.now(tz=UTC).timestamp())}"
         try:
