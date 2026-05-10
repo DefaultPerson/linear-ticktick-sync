@@ -26,9 +26,15 @@ def _column_lookup(data: TTProjectData) -> dict[str, str]:
 
 
 async def poll_once(ctx: SyncContext) -> dict[str, int]:
+    log.info("poll cycle start")
     counts = {"polled": 0, "created": 0, "updated": 0, "tombstoned": 0, "errors": 0}
-    data = await ctx.ticktick.get_project_data(ctx.settings.ticktick_list_id)
+    try:
+        data = await ctx.ticktick.get_project_data(ctx.settings.ticktick_list_id)
+    except Exception as exc:  # noqa: BLE001
+        log.error("poll TT fetch failed", error=str(exc))
+        return counts
     counts["polled"] = len(data.tasks)
+    log.info("poll fetched", count=len(data.tasks))
     cols = _column_lookup(data)
 
     seen_ttids: set[str] = {t.id for t in data.tasks}
