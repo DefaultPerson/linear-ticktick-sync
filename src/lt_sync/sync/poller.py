@@ -57,6 +57,7 @@ async def poll_once(ctx: SyncContext) -> dict[str, int]:
                 )
                 await repo.mark_tombstoned(session, link)
                 counts["tombstoned"] += 1
+    log.info("poll cycle done", **counts)
     return counts
 
 

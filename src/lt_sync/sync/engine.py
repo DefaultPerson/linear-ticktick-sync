@@ -198,6 +198,7 @@ async def sync_pair(
             decision = decide(link=link, issue=issue, tt=tt, new_hash=new_hash, inbound=inbound)
 
             if decision.direction is Direction.NOOP:
+                log.debug("sync noop", ident=issue.identifier, ttid=tt.id, reason=decision.reason)
                 await repo.record_event(
                     session,
                     source=source,
