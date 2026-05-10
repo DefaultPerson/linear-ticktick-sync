@@ -183,9 +183,13 @@ async def sync_pair(
     lock = repo.link_lock(f"linear:{issue.id}")
     async with lock:
         async with session_scope(ctx.sm) as session:
-            if await repo.event_seen(session, source, delivery_id):
-                log.debug("event already processed", source=source.value, delivery_id=delivery_id)
-                return Decision(Direction.NOOP, "duplicate_delivery")
+            # Idempotency only for explicit-delivery sources (e.g. Linear webhooks).
+            # TickTick poll has no per-event id (no modifiedTime), so we rely on
+            # canonical-hash dedup inside `decide()` instead.
+            if source not in {EventSource.TT_POLL, EventSource.LINEAR_BACKFILL}:
+                if await repo.event_seen(session, source, delivery_id):
+                    log.debug("event already processed", source=source.value, delivery_id=delivery_id)
+                    return Decision(Direction.NOOP, "duplicate_delivery")
 
             link = await repo.get_link_by_linear(session, issue.id)
             if link is None:
