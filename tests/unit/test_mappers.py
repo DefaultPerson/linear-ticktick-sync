@@ -275,4 +275,26 @@ def test_linear_to_tt_payload_basic():
     assert payload["title"] == "Hi"
     assert payload["priority"] == 5
     assert payload["isAllDay"] is True
-    assert "+0000" in payload["dueDate"]
+    # Midnight in Europe/Moscow (+03) so the TT UI shows the bare date.
+    assert payload["dueDate"] == "2026-05-15T00:00:00.000+0300"
+
+
+def test_linear_to_tt_payload_utc_tz_keeps_zero_offset():
+    from lt_sync.linear.types import LinearIssue
+
+    issue = LinearIssue(
+        id="x", identifier="HMC-1", title="Hi", description="", state_id="s1",
+        state_name="Todo", state_type="unstarted", priority=0, project_id=None,
+        due_date="2026-05-15",
+    )
+    payload = mappers.linear_to_tt_payload(issue, project_id="proj1", default_tz="UTC")
+    assert payload["dueDate"] == "2026-05-15T00:00:00.000+0000"
+
+
+def test_linear_date_to_tt_all_day_iso_unknown_tz_falls_back_to_utc():
+    iso = mappers.linear_date_to_tt_all_day_iso("2026-05-15", "Not/A/Zone")
+    assert iso == "2026-05-15T00:00:00.000+0000"
+
+
+def test_linear_date_to_tt_all_day_iso_bad_date_returns_none():
+    assert mappers.linear_date_to_tt_all_day_iso("not-a-date", "Europe/Moscow") is None

@@ -10,6 +10,7 @@ import hashlib
 import re
 from collections.abc import Iterable
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from lt_sync.linear.types import LinearIssue, LinearState
 from lt_sync.ticktick.types import TTChecklistItem, TTTask
@@ -183,6 +184,29 @@ def split_linear_description(text: str | None) -> tuple[str, list[tuple[bool, st
 # ─── TickTick title/content from Linear (when we create new TT task) ─────────
 
 
+def linear_date_to_tt_all_day_iso(linear_due: str, tz_name: str) -> str | None:
+    """Render a Linear YYYY-MM-DD as a TickTick all-day ISO at *local* midnight.
+
+    Why: TickTick stores `dueDate` as a full ISO with offset and decides display
+    purely off that instant. A UTC midnight (`…T00:00:00.000+0000`) surfaces as
+    03:00 in +03 zones — even with `isAllDay=True`. Emitting midnight in the
+    user's TZ (e.g. `…T00:00:00.000+0300`) lets the UI render the bare date.
+    Offset is encoded TickTick-style without the colon (`+0300`, not `+03:00`).
+    """
+    try:
+        d = date.fromisoformat(linear_due)
+    except ValueError:
+        return None
+    try:
+        tz: ZoneInfo | type[UTC] = ZoneInfo(tz_name) if tz_name else UTC  # type: ignore[assignment]
+    except ZoneInfoNotFoundError:
+        tz = UTC  # type: ignore[assignment]
+    iso = datetime(d.year, d.month, d.day, tzinfo=tz).isoformat(timespec="milliseconds")
+    if len(iso) >= 6 and iso[-3] == ":":
+        iso = iso[:-3] + iso[-2:]
+    return iso
+
+
 def linear_to_tt_payload(
     issue: LinearIssue,
     *,
@@ -198,16 +222,10 @@ def linear_to_tt_payload(
         "timeZone": default_tz,
     }
     if issue.due_date:
-        # TickTick expects ISO-8601 with offset; convert YYYY-MM-DD to start of day UTC.
-        try:
-            d = date.fromisoformat(issue.due_date)
-            iso = datetime(d.year, d.month, d.day, tzinfo=UTC).isoformat(
-                timespec="milliseconds"
-            )
-            payload["dueDate"] = iso.replace("+00:00", "+0000")
+        iso = linear_date_to_tt_all_day_iso(issue.due_date, default_tz)
+        if iso is not None:
+            payload["dueDate"] = iso
             payload["isAllDay"] = True
-        except ValueError:
-            pass
     return payload
 
 

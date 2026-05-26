@@ -7,7 +7,7 @@ asyncio mutex; the underlying SQLite session uses optimistic-locking (row_versio
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -162,25 +162,27 @@ async def _apply_linear_to_tt(
 
     if issue.due_date != _tt_due_to_linear_date(tt.due_date):
         if issue.due_date:
-            # Linear stores date-only; TT stores date+time and has a separate
-            # startDate. Preserve TT's time-of-day / timezone tails on both
-            # ends; only swap the YYYY-MM-DD prefix.
-            if tt.start_date and len(tt.start_date) >= 10:
-                payload["startDate"] = f"{issue.due_date}{tt.start_date[10:]}"
-            if tt.due_date and len(tt.due_date) >= 10:
+            # Linear stores date-only. If TT has a specific time-of-day
+            # (is_all_day=False), preserve it — only swap the YYYY-MM-DD prefix
+            # on both ends. Otherwise render an all-day midnight in the user's
+            # local TZ so TickTick UI shows the bare date (UTC midnight surfaces
+            # as 03:00 in +03 zones even with isAllDay=True).
+            if tt.due_date and not tt.is_all_day and len(tt.due_date) >= 10:
+                if tt.start_date and len(tt.start_date) >= 10:
+                    payload["startDate"] = f"{issue.due_date}{tt.start_date[10:]}"
                 payload["dueDate"] = f"{issue.due_date}{tt.due_date[10:]}"
             else:
-                from datetime import date, datetime
-
-                try:
-                    d = date.fromisoformat(issue.due_date)
-                    iso = datetime(d.year, d.month, d.day, tzinfo=UTC).isoformat(
-                        timespec="milliseconds"
-                    )
-                    payload["dueDate"] = iso.replace("+00:00", "+0000")
+                tz_name = (
+                    tt.time_zone
+                    if tt.time_zone and tt.time_zone != "UTC"
+                    else ctx.settings.ticktick_default_tz
+                )
+                iso = mappers.linear_date_to_tt_all_day_iso(issue.due_date, tz_name)
+                if iso is not None:
+                    payload["dueDate"] = iso
+                    payload["startDate"] = iso
                     payload["isAllDay"] = True
-                except ValueError:
-                    pass
+                    payload["timeZone"] = tz_name
         else:
             # Linear cleared the due date — clear both ends in TT.
             payload["startDate"] = None
