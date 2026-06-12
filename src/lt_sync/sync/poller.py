@@ -270,6 +270,13 @@ async def _relocate_tt_task(ctx_from: SyncContext, ctx_to: SyncContext, tt: TTTa
         log.warning("tt in-place move failed; recreating", ttid=tt.id, error=str(exc))
 
     created = await ctx_to.ticktick.create_task(_recreate_payload(tt, target, ctx_to))
+    # TickTick's create endpoint won't honour a completed status — re-apply it so a
+    # Done/wontDo task that gets recreated during a re-home doesn't reappear as open.
+    if tt.status == mappers.TT_COMPLETED:
+        try:
+            await ctx_to.ticktick.complete_task(target, created.id)
+        except Exception as exc:
+            log.warning("re-completing recreated task failed", ttid=created.id, error=str(exc))
     try:
         await ctx_from.ticktick.delete_task(ctx_from.ticktick_list_id, tt.id)
     except Exception as exc:
