@@ -83,9 +83,14 @@ class LinearClient:
         return data["viewer"]
 
     async def get_team(self, team_key: str) -> LinearTeam:
+        # Resolve by key OR name (case-insensitive), so a pair may be configured
+        # with either the team key ("HMC") or its display name ("w3a").
         q = """
-        query($key: String!) {
-          teams(filter: {key: {eq: $key}}, first: 1) {
+        query($q: String!) {
+          teams(
+            filter: {or: [{key: {eqIgnoreCase: $q}}, {name: {eqIgnoreCase: $q}}]}
+            first: 1
+          ) {
             nodes {
               id key name
               states(first: 100) { nodes { id name type position } }
@@ -95,7 +100,7 @@ class LinearClient:
           }
         }
         """
-        data = await self._post(q, {"key": team_key})
+        data = await self._post(q, {"q": team_key})
         nodes = data["teams"]["nodes"]
         if not nodes:
             raise LinearError(f"Team {team_key} not found")
@@ -234,6 +239,7 @@ class LinearClient:
         state_id: str | None = None,
         priority: int | None = None,
         project_id: str | None = None,
+        team_id: str | None = None,
         label_ids: list[str] | None = None,
         due_date: str | None = None,
     ) -> LinearIssue:
@@ -256,6 +262,8 @@ class LinearClient:
             inp["priority"] = priority
         if project_id is not None:
             inp["projectId"] = project_id
+        if team_id is not None:
+            inp["teamId"] = team_id
         if label_ids is not None:
             inp["labelIds"] = label_ids
         if due_date is not None:
@@ -320,6 +328,7 @@ fragment IssueFields on Issue {
   id identifier title description priority dueDate url
   createdAt updatedAt
   state { id name type }
+  team { id key }
   project { id }
   labels { nodes { id name } }
 }
@@ -343,6 +352,8 @@ def _parse_issue(n: dict[str, Any]) -> LinearIssue:
         state_type=n["state"]["type"],
         priority=n.get("priority") or 0,
         project_id=(n.get("project") or {}).get("id"),
+        team_key=(n.get("team") or {}).get("key"),
+        team_id=(n.get("team") or {}).get("id"),
         label_ids=[lab["id"] for lab in n["labels"]["nodes"]],
         label_names=[lab["name"] for lab in n["labels"]["nodes"]],
         due_date=n.get("dueDate"),

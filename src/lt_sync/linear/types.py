@@ -38,6 +38,8 @@ class LinearIssue:
     state_type: str
     priority: int
     project_id: str | None
+    team_key: str | None = None
+    team_id: str | None = None
     label_ids: list[str] = field(default_factory=list)
     label_names: list[str] = field(default_factory=list)
     due_date: str | None = None  # YYYY-MM-DD

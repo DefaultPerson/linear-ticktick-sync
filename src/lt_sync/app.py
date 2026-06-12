@@ -13,7 +13,7 @@ from lt_sync.logging_setup import configure_logging, log
 from lt_sync.scheduler import make_scheduler
 from lt_sync.state import repo
 from lt_sync.state.db import init_db, make_engine, make_sessionmaker, session_scope
-from lt_sync.sync.setup import build_context
+from lt_sync.sync.setup import build_contexts
 from lt_sync.ticktick.client import TickTickClient
 from lt_sync.ticktick.oauth import build_authorize_url, exchange_code, make_state
 from lt_sync.ticktick.token_provider import DbTokenProvider, TokenError
@@ -36,15 +36,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.sm = sm
     app.state.linear = linear
     app.state.ticktick = ticktick
-    app.state.sync_ctx = None
+    app.state.sync_ctxs = []
     app.state.scheduler = None
 
     try:
-        ctx = await build_context(settings=settings, sm=sm, linear=linear, ticktick=ticktick)
-        app.state.sync_ctx = ctx
+        ctxs = await build_contexts(settings=settings, sm=sm, linear=linear, ticktick=ticktick)
+        app.state.sync_ctxs = ctxs
+        log.info("contexts built", pairs=[(c.team.key, c.ticktick_list_id) for c in ctxs])
         try:
             await ticktick._token_provider()  # type: ignore[attr-defined]
-            scheduler = make_scheduler(ctx)
+            scheduler = make_scheduler(ctxs)
             scheduler.start()
             app.state.scheduler = scheduler
             log.info("scheduler started")
@@ -72,10 +73,11 @@ def create_app() -> FastAPI:
 
     @app.get("/healthz")
     async def healthz() -> dict[str, object]:
-        ctx = app.state.sync_ctx
+        ctxs = getattr(app.state, "sync_ctxs", [])
         return {
             "ok": True,
-            "ctx_ready": ctx is not None,
+            "ctx_ready": bool(ctxs),
+            "pairs": [{"team": c.team.key, "list": c.ticktick_list_id} for c in ctxs],
             "scheduler_running": app.state.scheduler is not None,
         }
 

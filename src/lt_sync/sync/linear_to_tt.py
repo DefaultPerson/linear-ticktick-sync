@@ -14,7 +14,7 @@ async def create_tt_for_linear(ctx: SyncContext, issue: LinearIssue) -> str | No
     """Create a TickTick task mirroring `issue`. Returns the new TT task id."""
     tz_name = ctx.settings.ticktick_default_tz
     payload: dict[str, object] = {
-        "projectId": ctx.settings.ticktick_list_id,
+        "projectId": ctx.ticktick_list_id,
         "title": issue.title,
         "content": _strip_fence(issue.description),
         "priority": mappers.linear_priority_to_tt(issue.priority),
@@ -51,6 +51,7 @@ async def create_tt_for_linear(ctx: SyncContext, issue: LinearIssue) -> str | No
             linear_id=refreshed.id,
             linear_ident=refreshed.identifier,
             ttid=tt.id,
+            ticktick_list_id=ctx.ticktick_list_id,
             last_seen_l_updated_at=refreshed.updated_at,
             last_seen_t_updated_at=tt.modified_time,
         )

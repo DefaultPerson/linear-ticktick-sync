@@ -34,10 +34,25 @@ class SyncContext:
     linear: LinearClient
     ticktick: TickTickClient
     team: LinearTeam
-    project: LinearProject
+    project: LinearProject | None
+    ticktick_list_id: str
     sync_label: LinearLabel
     delegated_label: LinearLabel | None
     tombstoned_label: LinearLabel | None
+
+
+def ctx_for_issue(
+    ctxs: list[SyncContext] | tuple[SyncContext, ...], issue: LinearIssue
+) -> SyncContext | None:
+    """Pick the sync pair that owns an issue: matching team + (project filter if any)."""
+    for c in ctxs:
+        if (
+            issue.team_key
+            and c.team.key == issue.team_key
+            and (c.project is None or issue.project_id == c.project.id)
+        ):
+            return c
+    return None
 
 
 def _state_by_id(team: LinearTeam, state_id: str):  # type: ignore[no-untyped-def]
@@ -105,13 +120,18 @@ async def _apply_tt_to_linear(
 
     due = _tt_due_to_linear_date(tt.due_date)
 
+    # Only (re)assign a project when this pair pins one and the issue isn't there.
+    project_id = (
+        ctx.project.id if (ctx.project is not None and issue.project_id != ctx.project.id) else None
+    )
+
     updated = await ctx.linear.update_issue(
         issue.id,
         title=tt.title,
         description=description,
         state_id=target_state.id,
         priority=target_priority,
-        project_id=ctx.project.id if issue.project_id != ctx.project.id else None,
+        project_id=project_id,
         label_ids=label_ids,
         due_date=due,
     )
@@ -225,6 +245,7 @@ async def sync_pair(
                     linear_id=issue.id,
                     linear_ident=issue.identifier,
                     ttid=tt.id,
+                    ticktick_list_id=ctx.ticktick_list_id,
                     last_seen_l_updated_at=issue.updated_at,
                     last_seen_t_updated_at=tt.modified_time,
                 )
@@ -295,4 +316,4 @@ async def sync_pair(
         return decision
 
 
-__all__ = ["SyncContext", "compute_hash", "sync_pair"]
+__all__ = ["SyncContext", "compute_hash", "ctx_for_issue", "sync_pair"]

@@ -18,7 +18,7 @@ from lt_sync.state import repo
 from lt_sync.state.db import session_scope
 from lt_sync.state.models import EventSource
 from lt_sync.sync.conflict import Direction
-from lt_sync.sync.engine import sync_pair
+from lt_sync.sync.engine import SyncContext, ctx_for_issue, sync_pair
 
 router = APIRouter()
 
@@ -47,9 +47,9 @@ async def linear_webhook(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     delivery_id = make_delivery_id(payload)
-    ctx = request.app.state.sync_ctx
-    if ctx is None:
-        log.error("sync_ctx not initialised on webhook")
+    ctxs: list[SyncContext] = request.app.state.sync_ctxs
+    if not ctxs:
+        log.error("sync_ctxs not initialised on webhook")
         raise HTTPException(status_code=503, detail="sync engine not ready")
 
     action = payload.get("action")
@@ -64,31 +64,36 @@ async def linear_webhook(
     if not isinstance(issue_id, str):
         return {"ok": True, "skipped": "missing_id"}
 
-    # idempotency
-    async with session_scope(ctx.sm) as session:
+    sm = ctxs[0].sm
+    linear = ctxs[0].linear
+
+    # idempotency (single shared DB)
+    async with session_scope(sm) as session:
         if await repo.event_seen(session, EventSource.LINEAR_WEBHOOK, delivery_id):
             return {"ok": True, "duplicate": True}
 
     if action == "remove":
-        await _handle_remove(ctx, issue_id, delivery_id)
+        await _handle_remove(ctxs, issue_id, delivery_id)
         return {"ok": True, "removed": True}
 
-    issue = await ctx.linear.find_issue_by_id(issue_id)
+    issue = await linear.find_issue_by_id(issue_id)
     if issue is None:
         return {"ok": True, "skipped": "issue_gone"}
-    if issue.project_id != ctx.project.id:
-        return {"ok": True, "skipped": "wrong_project"}
+
+    ctx = ctx_for_issue(ctxs, issue)
+    if ctx is None:
+        return {"ok": True, "skipped": "untracked_team"}
 
     async with session_scope(ctx.sm) as session:
         link = await repo.get_link_by_linear(session, issue_id)
     if link is None:
-        # New (or moved) Linear issue in our project — mirror to TickTick.
+        # New (or moved-in) Linear issue in a tracked team — mirror to TickTick.
         from lt_sync.sync.linear_to_tt import create_tt_for_linear
 
         ttid = await create_tt_for_linear(ctx, issue)
-        return {"ok": True, "created_tt": ttid}
+        return {"ok": True, "created_tt": ttid, "team": ctx.team.key}
 
-    tt = await ctx.ticktick.get_task(ctx.settings.ticktick_list_id, link.ttid)
+    tt = await ctx.ticktick.get_task(ctx.ticktick_list_id, link.ttid)
     if tt is None:
         return {"ok": True, "skipped": "tt_task_missing"}
 
@@ -103,18 +108,29 @@ async def linear_webhook(
     return {"ok": True, "direction": decision.direction.value, "reason": decision.reason}
 
 
-async def _handle_remove(ctx, issue_id: str, delivery_id: str) -> None:  # type: ignore[no-untyped-def]
-    """Linear issue deleted → mark TickTick task wontDo (status=-1)."""
+async def _handle_remove(
+    ctxs: list[SyncContext], issue_id: str, delivery_id: str
+) -> None:
+    """Linear issue deleted → mark TickTick task wontDo (status=-1).
+
+    Routes by the link's own `ticktick_list_id` (the issue is gone, so we can't
+    fetch its team) — works regardless of which pair owned it.
+    """
     from lt_sync.state.models import Side
     from lt_sync.sync import mappers
 
-    async with session_scope(ctx.sm) as session:
+    ticktick = ctxs[0].ticktick
+    sm = ctxs[0].sm
+    async with session_scope(sm) as session:
         link = await repo.get_link_by_linear(session, issue_id)
         if link is None:
             return
-        tt = await ctx.ticktick.get_task(ctx.settings.ticktick_list_id, link.ttid)
+        list_id = link.ticktick_list_id or ctxs[0].settings.ticktick_list_id
+        tt = await ticktick.get_task(list_id, link.ttid)
         if tt is not None:
-            await ctx.ticktick.update_task(link.ttid, {"id": link.ttid, "projectId": tt.project_id, "status": mappers.TT_WONTDO})
+            await ticktick.update_task(
+                link.ttid, {"id": link.ttid, "projectId": tt.project_id, "status": mappers.TT_WONTDO}
+            )
         await repo.add_tombstone(session, side=Side.LINEAR, linear_id=issue_id, ttid=link.ttid, note="linear_remove")
         await repo.mark_tombstoned(session, link)
         await repo.record_event(

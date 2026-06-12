@@ -42,6 +42,7 @@ async def upsert_link(
     linear_id: str,
     linear_ident: str,
     ttid: str,
+    ticktick_list_id: str,
     hash_canonical: str | None = None,
     last_seen_l_updated_at: datetime | None = None,
     last_seen_t_updated_at: datetime | None = None,
@@ -54,6 +55,7 @@ async def upsert_link(
             linear_id=linear_id,
             linear_ident=linear_ident,
             ttid=ttid,
+            ticktick_list_id=ticktick_list_id,
             hash_canonical=hash_canonical,
             last_seen_l_updated_at=last_seen_l_updated_at,
             last_seen_t_updated_at=last_seen_t_updated_at,
@@ -64,6 +66,7 @@ async def upsert_link(
     link.linear_id = linear_id
     link.linear_ident = linear_ident
     link.ttid = ttid
+    link.ticktick_list_id = ticktick_list_id
     if hash_canonical is not None:
         link.hash_canonical = hash_canonical
     if last_seen_l_updated_at is not None:
@@ -71,6 +74,27 @@ async def upsert_link(
     if last_seen_t_updated_at is not None:
         link.last_seen_t_updated_at = last_seen_t_updated_at
     return link
+
+
+async def relocate_link(
+    session: AsyncSession,
+    link: Link,
+    *,
+    new_ttid: str,
+    new_list_id: str,
+    new_linear_ident: str | None = None,
+) -> None:
+    """Re-home a link to a different sync pair after an issue moved teams.
+
+    Preserves `hash_canonical` + echo windows so the next sync NOOPs instead of
+    re-writing both sides. Resets the TT-miss counter (the task isn't gone, it moved).
+    """
+    link.ttid = new_ttid
+    link.ticktick_list_id = new_list_id
+    if new_linear_ident is not None:
+        link.linear_ident = new_linear_ident
+    link.tt_miss_count = 0
+    link.row_version += 1
 
 
 async def mark_synced(
@@ -92,8 +116,13 @@ async def mark_synced(
     link.row_version += 1
 
 
-async def list_active_links(session: AsyncSession) -> list[Link]:
-    res = await session.execute(select(Link).where(Link.tombstoned.is_(False)))
+async def list_active_links(
+    session: AsyncSession, ticktick_list_id: str | None = None
+) -> list[Link]:
+    stmt = select(Link).where(Link.tombstoned.is_(False))
+    if ticktick_list_id is not None:
+        stmt = stmt.where(Link.ticktick_list_id == ticktick_list_id)
+    res = await session.execute(stmt)
     return list(res.scalars())
 
 
@@ -233,6 +262,7 @@ __all__ = [
     "mark_synced",
     "mark_tombstoned",
     "record_event",
+    "relocate_link",
     "reset_tt_miss",
     "save_token",
     "upsert_link",

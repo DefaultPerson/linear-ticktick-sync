@@ -45,6 +45,10 @@ class Link(Base):
     linear_ident: Mapped[str] = mapped_column(String(32), index=True)  # e.g. HMC-277
     ttid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
 
+    # Which TickTick list this link's task lives in — identifies the sync pair.
+    # Nullable for the runtime ALTER on legacy DBs; backfilled to the legacy list.
+    ticktick_list_id: Mapped[str | None] = mapped_column(String(64), index=True)
+
     # Canonical hash of the joint state (title+priority+status+description-fenced+items)
     hash_canonical: Mapped[str | None] = mapped_column(String(64))
 

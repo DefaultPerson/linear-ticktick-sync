@@ -215,10 +215,13 @@ async def _link_existing(
     if ctx.sync_label.id not in label_ids:
         label_ids.append(ctx.sync_label.id)
 
+    project_id = (
+        ctx.project.id if (ctx.project is not None and issue.project_id != ctx.project.id) else None
+    )
     await ctx.linear.update_issue(
         issue.id,
         description=description,
-        project_id=ctx.project.id if issue.project_id != ctx.project.id else None,
+        project_id=project_id,
         label_ids=label_ids,
     )
 
@@ -229,6 +232,7 @@ async def _link_existing(
             linear_id=refreshed.id,
             linear_ident=refreshed.identifier,
             ttid=tt.id,
+            ticktick_list_id=ctx.ticktick_list_id,
             last_seen_l_updated_at=refreshed.updated_at,
             last_seen_t_updated_at=tt.modified_time,
         )
@@ -254,7 +258,7 @@ async def _create_linear(
         description=description,
         state_id=state.id,
         priority=priority,
-        project_id=ctx.project.id,
+        project_id=ctx.project.id if ctx.project else None,
         label_ids=[ctx.sync_label.id],
         due_date=due,
     )
@@ -264,6 +268,7 @@ async def _create_linear(
             linear_id=issue.id,
             linear_ident=issue.identifier,
             ttid=tt.id,
+            ticktick_list_id=ctx.ticktick_list_id,
             last_seen_l_updated_at=issue.updated_at,
             last_seen_t_updated_at=tt.modified_time,
         )

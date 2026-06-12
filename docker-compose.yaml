@@ -17,6 +17,8 @@ services:
       TICKTICK_REDIRECT_URI: ${TICKTICK_REDIRECT_URI}
       TICKTICK_LIST_ID: ${TICKTICK_LIST_ID:-69cd04eb8f088eaeff7fb755}
       TICKTICK_DEFAULT_TZ: ${TICKTICK_DEFAULT_TZ:-Europe/Moscow}
+      # JSON list of {team_key, ticktick_list_id, project_name?}; empty → legacy single pair.
+      SYNC_PAIRS: ${SYNC_PAIRS:-}
       PUSHOVER_TOKEN: ${PUSHOVER_TOKEN:-}
       PUSHOVER_USER: ${PUSHOVER_USER:-}
       POLL_INTERVAL_SEC: ${POLL_INTERVAL_SEC:-180}

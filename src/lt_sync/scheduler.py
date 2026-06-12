@@ -14,47 +14,52 @@ from lt_sync.sync.engine import SyncContext
 from lt_sync.sync.poller import poll_once
 
 
-def make_scheduler(ctx: SyncContext) -> AsyncIOScheduler:
+def make_scheduler(ctxs: list[SyncContext]) -> AsyncIOScheduler:
     sched = AsyncIOScheduler(timezone="UTC")
-    s = ctx.settings
+    s = ctxs[0].settings
+    now = datetime.now(tz=UTC)
 
-    sched.add_job(
-        poll_once,
-        "interval",
-        seconds=s.poll_interval_sec,
-        args=[ctx],
-        id="tt_poll",
-        max_instances=1,
-        coalesce=True,
-        next_run_time=datetime.now(tz=UTC) + timedelta(seconds=5),
-    )
-    sched.add_job(
-        _linear_backfill,
-        "interval",
-        seconds=s.linear_backfill_interval_sec,
-        args=[ctx],
-        id="linear_backfill",
-        max_instances=1,
-        coalesce=True,
-        next_run_time=datetime.now(tz=UTC) + timedelta(seconds=15),
-    )
+    for i, ctx in enumerate(ctxs):
+        # Stagger pairs so their TickTick fetches don't all fire at once.
+        sched.add_job(
+            poll_once,
+            "interval",
+            seconds=s.poll_interval_sec,
+            args=[ctx, ctxs],
+            id=f"tt_poll:{ctx.team.key}",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=now + timedelta(seconds=5 + i * 10),
+        )
+        sched.add_job(
+            _linear_backfill,
+            "interval",
+            seconds=s.linear_backfill_interval_sec,
+            args=[ctx],
+            id=f"linear_backfill:{ctx.team.key}",
+            max_instances=1,
+            coalesce=True,
+            next_run_time=now + timedelta(seconds=15 + i * 10),
+        )
+
+    # Token check is global (one TickTick token) — add exactly once.
     sched.add_job(
         _token_expiry_check,
         "interval",
         seconds=s.token_check_interval_sec,
-        args=[ctx],
+        args=[ctxs[0]],
         id="token_check",
         max_instances=1,
         coalesce=True,
-        next_run_time=datetime.now(tz=UTC) + timedelta(seconds=30),
+        next_run_time=now + timedelta(seconds=30),
     )
     return sched
 
 
 async def _linear_backfill(ctx: SyncContext) -> None:
-    """Hourly: scan project `hm` issues, mirror missing ones to TickTick + re-eval."""
+    """Periodic: scan this pair's team issues, mirror missing ones to TickTick + re-eval."""
     issues = await ctx.linear.list_team_issues(
-        ctx.settings.linear_team_key, project_id=ctx.project.id, limit=250
+        ctx.team.key, project_id=ctx.project.id if ctx.project else None, limit=250
     )
     log.info("linear backfill", count=len(issues))
     from lt_sync.state.models import EventSource
@@ -73,7 +78,7 @@ async def _linear_backfill(ctx: SyncContext) -> None:
             continue
         if link.tombstoned:
             continue
-        tt = await ctx.ticktick.get_task(ctx.settings.ticktick_list_id, link.ttid)
+        tt = await ctx.ticktick.get_task(ctx.ticktick_list_id, link.ttid)
         if tt is None:
             continue
 

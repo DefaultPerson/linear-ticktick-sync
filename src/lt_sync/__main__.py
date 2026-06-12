@@ -15,7 +15,7 @@ from lt_sync.logging_setup import configure_logging
 from lt_sync.state import repo
 from lt_sync.state.db import init_db, make_engine, make_sessionmaker, session_scope
 from lt_sync.sync import reconcile
-from lt_sync.sync.setup import build_context
+from lt_sync.sync.setup import build_context, build_contexts
 from lt_sync.ticktick.client import TickTickClient
 from lt_sync.ticktick.oauth import build_authorize_url, make_state
 from lt_sync.ticktick.token_provider import DbTokenProvider
@@ -174,9 +174,10 @@ def poll_once_cmd() -> None:
         linear = LinearClient(settings.linear_api_key.get_secret_value())
         ticktick = TickTickClient(DbTokenProvider(sm))
         try:
-            ctx = await build_context(settings=settings, sm=sm, linear=linear, ticktick=ticktick)
-            counts = await poll_once(ctx)
-            typer.echo(f"poll counts: {counts}")
+            ctxs = await build_contexts(settings=settings, sm=sm, linear=linear, ticktick=ticktick)
+            for ctx in ctxs:
+                counts = await poll_once(ctx, ctxs)
+                typer.echo(f"poll counts [{ctx.team.key}]: {counts}")
         finally:
             await linear.close()
             await ticktick.close()
